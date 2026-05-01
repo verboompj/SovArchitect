@@ -518,6 +518,7 @@ BEFORE CALLING THIS TOOL, verify the architecture markdown passes all pre-flight
 - Every named network resource (AppGW, Bastion, LB, Firewall) appears in the table
 - Every component in the table has an entry in the Sovereignty Controls Matrix
 - Every VM in the architecture has a Bicep resource block + required extensions (Entra SSH + AMA)
+- Bicep contains NO Microsoft.Network/privateDnsZones resources; architecture ends with Appendix A listing all required Private DNS zones + DNS entries (WAF compliance)
 
 Writes to the session output folder:
   - architecture.html  — full HTML presentation of the final architecture
@@ -839,6 +840,13 @@ Design a complete end-to-end sovereign architecture tailored to this profile. St
 
 Use sovereign_architect_search_docs and sovereign_architect_cloud_services to validate service availability in the target environment.
 
+⚠️ PRIVATE DNS ZONES — WAF/CAF compliance rule:
+Private DNS zones MUST NOT be deployed in the workload subscription. They belong in the central Connectivity subscription (hub). Do NOT include any Microsoft.Network/privateDnsZones resources in the workload Bicep.
+Instead, close the architecture with a dedicated **Appendix A: Required Private DNS Zones** section that lists:
+- Every private DNS zone name required (e.g. privatelink.postgres.database.azure.com)
+- For each zone: the DNS record type, record name, and IP/FQDN value to register
+- The owning team / process responsible for registering these in the central zone
+
 ⚠️ DO NOT write Bicep or HTML output yet — output artifacts are written ONLY after rubber-duck review and rework (final output step).
 
 When the draft architecture is presented, call sovereign_architect_save_architecture to save the draft and proceed to the rubber-duck review phase.` };
@@ -861,6 +869,7 @@ Perform a thorough, adversarial rubber-duck critique of this sovereign architect
 6. **Key management risks** — key rotation policy, backup, access policy, HSM availability zone coverage
 7. **Resilience vs. data residency conflicts** — cross-region DR that may violate residency requirements
 8. **Design improvements** — anything that would make the architecture more sovereign, robust, or operable
+9. **Private DNS zone placement (WAF violation check)** — flag as a WAF/CAF violation if any `Microsoft.Network/privateDnsZones` resources appear in the workload Bicep or architecture. They belong in the central Connectivity subscription (hub). Verify the architecture ends with an "Appendix A: Required Private DNS Zones" section listing every zone name and required DNS entries.
 
 Present the full critique to the user, then call sovereign_architect_save_review with your findings.` };
 
@@ -885,6 +894,7 @@ Produce an improved, final architecture that addresses all findings from the rub
 2. **Network components** — Every named network resource (AppGW, Bastion, Load Balancer, Firewall, etc.) referenced in the architecture must appear in the Component Design table.
 3. **Sovereignty controls completeness** — Every component in the table must have an entry in the Sovereignty Controls Matrix.
 4. **Bicep completeness** — Every VM defined in the architecture must have a corresponding resource block in the Bicep template, including all required extensions (Entra SSH + AMA agent).
+5. **Private DNS zone WAF compliance** — The Bicep must contain NO `Microsoft.Network/privateDnsZones` resources (they belong in the Connectivity subscription). The architecture document must end with an **"Appendix A: Required Private DNS Zones"** section that lists: every zone name, the DNS record type and name, the target IP or FQDN, and the owning team/process. If the appendix is missing or the Bicep still contains DNS zone resources, fix both before proceeding.
 
 Only call sovereign_architect_finalize_architecture after verifying all four checks pass. If any check fails, fix the architecture and/or Bicep first.
 
