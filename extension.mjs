@@ -857,6 +857,8 @@ When the landing zone design is presented and approved, call sovereign_architect
                 case "designing":
                     // Step 1: workload architecture design (draft — no output artifacts yet)
                     return { additionalContext: `## STEP 1: Sovereign Architecture Design (DRAFT)
+⚠️ INDEPENDENT SESSION — Do NOT reference, compare to, or build upon any previous session output, prior run, or earlier design. This architecture must be designed entirely from the customer profile below.
+
 ${summarizeProfile(sess.profile)}
 
 Design a complete end-to-end sovereign architecture tailored to this profile. Structure the output as:
@@ -895,10 +897,12 @@ When the draft architecture is presented, call sovereign_architect_save_architec
                 case "reviewing":
                     // Rubber-duck critique of the draft architecture
                     return { additionalContext: `## RUBBER-DUCK REVIEW PHASE
+⚠️ INDEPENDENT SESSION — Do NOT reference, compare to, or build upon any previous session output or prior designs. Critique only the draft below.
+
 ${summarizeProfile(sess.profile)}
 
 **Architecture draft to critique:**
-${sess.architecture?.architecture || "(see previous output)"}
+${sess.architecture?.architecture || "(draft not yet saved — ask the agent to call sovereign_architect_save_architecture first)"}
 
 Perform a thorough, adversarial rubber-duck critique of this sovereign architecture. Check every component against the customer's sovereignty profile. Specifically look for:
 
@@ -928,13 +932,15 @@ Present the full critique to the user, then call sovereign_architect_save_review
                 case "reworking":
                     // Incorporate review critique into improved final architecture
                     return { additionalContext: `## REWORK PHASE — Incorporate Critique Findings
+⚠️ INDEPENDENT SESSION — Do NOT reference, compare to, or build upon any previous session output or prior designs. The final architecture must stand alone.
+
 ${summarizeProfile(sess.profile)}
 
 **Review findings to incorporate:**
-${sess.reviewNotes || "(see review output)"}
+${sess.reviewNotes || "(review not yet saved — ask the agent to call sovereign_architect_save_review first)"}
 
 **Original draft architecture:**
-${sess.architecture?.architecture || "(see previous output)"}
+${sess.architecture?.architecture || "(draft not yet saved — ask the agent to call sovereign_architect_save_architecture first)"}
 
 Produce an improved, final architecture that addresses all findings from the rubber-duck review. For each finding either:
 - **Fix it** in the redesign and note what changed, or
@@ -979,12 +985,33 @@ Use sovereign_architect_landing_zone to fetch SLZ guidance for each topic before
 When the landing zone is presented and approved, call sovereign_architect_save_landing_zone to finalize.` };
 
                 case "complete":
-                    // Workflow done — inject compact context for revisions and deep-dives
-                    if (isSovereignTopic || isDesignIntent) {
-                        const lzNote = sess.lzExists
-                            ? "\n\n**Landing Zone:** Customer already has an SLZ in place — do NOT offer or suggest designing a Landing Zone. Step 2 is not applicable."
-                            : `\n\n**Landing Zone:** ${sess.landingZone?.summary || ""}`;
-                        return { additionalContext: `Sovereign Architect workflow complete. Customer context for revisions:\n\n${summarizeProfile(sess.profile)}\n\n**Architecture:** ${sess.architecture?.summary || ""}${lzNote}` };
+                    // New design request — wipe all session state and start completely fresh
+                    if (isSovereignTopic && isDesignIntent) {
+                        sess.state        = "validating-lz";
+                        sess.profile      = null;
+                        sess.architecture = null;
+                        sess.reviewNotes  = null;
+                        sess.landingZone  = null;
+                        sess.lzExists     = undefined;
+                        sess.lzFirst      = undefined;
+                        sess.outputDir    = null;
+                        return { additionalContext: `⚠️ FRESH SESSION — all previous state has been cleared. This is a completely new, independent design. Do NOT reference, compare to, or build upon any previous session output or prior designs.
+
+⚠️ VALIDATION REQUIRED before proceeding. Use ask_user with this exact schema:
+
+{
+  "message": "Sovereign Architect — Environment Check\\n\\nBefore designing, confirm your current Azure environment setup.",
+  "requestedSchema": {
+    "properties": {
+      "lz_exists": { "type": "string", "title": "Do you already have a Sovereign Landing Zone and Management Group hierarchy in place?", "enum": ["Yes — design a sovereign workload on top of it", "No — design a new Sovereign Landing Zone first"], "default": "Yes — design a sovereign workload on top of it" }
+    },
+    "required": ["lz_exists"]
+  }
+}
+
+Then call sovereign_architect_confirm_environment based on their answer:
+- "Yes — design a sovereign workload on top of it" → lz_exists=true, proceed=true
+- "No — design a new Sovereign Landing Zone first" → lz_exists=false, proceed=true` };
                     }
                     break;
 
