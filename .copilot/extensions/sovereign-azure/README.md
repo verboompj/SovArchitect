@@ -78,12 +78,6 @@ idle
                                                            └─(workload)─► designing ──► complete
 ```
 
-## Running the smoke tests
-
-```bash
-node smoke-test.mjs
-# or
-npm test
 ```
 
 Tests cover: session isolation, state transitions, per-session output folders, file write, path traversal guard.
