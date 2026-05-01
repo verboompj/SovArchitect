@@ -35,6 +35,11 @@ sovereign-output/
 
 - [GitHub Copilot CLI](https://githubnext.com/projects/copilot-cli) installed
 - Node.js ≥ 20
+- **Experimental mode enabled** — extensions require experimental mode. Enable it once with:
+  ```bash
+  copilot --experimental
+  ```
+  or run `/experimental` from within a Copilot CLI session. The setting persists across sessions.
 
 ## Installation
 
