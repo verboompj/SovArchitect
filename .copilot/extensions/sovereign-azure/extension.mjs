@@ -513,6 +513,12 @@ The review should identify: sovereignty gaps, missing controls, compliance risks
 THIS IS THE OUTPUT STEP — call ONLY after rubber-duck review and rework are complete.
 Do NOT call this tool during initial design — it must follow sovereign_architect_save_review.
 
+BEFORE CALLING THIS TOOL, verify the architecture markdown passes all pre-flight checks:
+- Every VM named anywhere in the document has a row in the Component Design table (section 2.1)
+- Every named network resource (AppGW, Bastion, LB, Firewall) appears in the table
+- Every component in the table has an entry in the Sovereignty Controls Matrix
+- Every VM in the architecture has a Bicep resource block + required extensions (Entra SSH + AMA)
+
 Writes to the session output folder:
   - architecture.html  — full HTML presentation of the final architecture
   - <filename>.bicep   — complete Bicep IaC template
@@ -873,7 +879,16 @@ Produce an improved, final architecture that addresses all findings from the rub
 - **Fix it** in the redesign and note what changed, or
 - **Justify** why it does not apply to this customer's profile
 
-After presenting the reworked architecture, call sovereign_architect_finalize_architecture with:
+⚠️ MANDATORY PRE-FLIGHT CHECK — Before calling sovereign_architect_finalize_architecture, perform this self-audit of the final architecture markdown:
+
+1. **VM completeness** — List every VM by name from the entire document (narrative text, Bicep pseudocode, design decisions, any section). Then verify each one appears as a row in the Component Design table (section 2.1 or equivalent). Count must match exactly. If any VM is missing from the table, add it before proceeding.
+2. **Network components** — Every named network resource (AppGW, Bastion, Load Balancer, Firewall, etc.) referenced in the architecture must appear in the Component Design table.
+3. **Sovereignty controls completeness** — Every component in the table must have an entry in the Sovereignty Controls Matrix.
+4. **Bicep completeness** — Every VM defined in the architecture must have a corresponding resource block in the Bicep template, including all required extensions (Entra SSH + AMA agent).
+
+Only call sovereign_architect_finalize_architecture after verifying all four checks pass. If any check fails, fix the architecture and/or Bicep first.
+
+After presenting the reworked architecture and completing the pre-flight check, call sovereign_architect_finalize_architecture with:
 - The final summary and complete markdown architecture
 - A complete Bicep template implementing the final design (choose a descriptive filename, e.g. sovereign-vm-gdpr.bicep)
 
