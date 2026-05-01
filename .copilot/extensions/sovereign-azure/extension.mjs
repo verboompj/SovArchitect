@@ -63,19 +63,21 @@ function markdownToHtml(md) {
         return `\x00BLOCK${idx}\x00`;
     });
 
-    const lines  = md.split("\n");
-    const output = [];
-    let inList   = false;
-    let tableRows = [];
+    const lines    = md.split("\n");
+    const output   = [];
+    let inList     = false;
+    let inOl       = false;
+    let tableRows  = [];
 
     function flushList() {
-        if (inList) { output.push("</ul>"); inList = false; }
+        if (inList)  { output.push("</ul>"); inList  = false; }
+        if (inOl)    { output.push("</ol>"); inOl    = false; }
     }
     function flushTable() {
         if (!tableRows.length) return;
         // First row = header, second row = separator (skip), rest = body
         const [headerRow, , ...bodyRows] = tableRows;
-        const thCells = headerRow.map(c => `<th>${inlineFormat(c)}</th>`).join("");
+        const thCells   = headerRow.map(c => `<th>${inlineFormat(c)}</th>`).join("");
         const tbodyHtml = bodyRows.map(
             row => "<tr>" + row.map(c => `<td>${inlineFormat(c)}</td>`).join("") + "</tr>"
         ).join("\n");
@@ -89,6 +91,12 @@ function markdownToHtml(md) {
     function isSeparator(cells) {
         return cells.every(c => /^[-:]+$/.test(c));
     }
+    function calloutClass(text) {
+        if (/^[⚠️🔶]/.test(text) || /^(WARNING|WARN):/.test(text)) return "warn";
+        if (/^[❌🚫]/.test(text)  || /^(ERROR|DANGER):/.test(text)) return "danger";
+        if (/^[💡ℹ️✅🔷]/.test(text) || /^(INFO|NOTE|TIP):/.test(text)) return "info";
+        return "callout";
+    }
 
     for (const line of lines) {
         if (line.startsWith("|")) {
@@ -100,10 +108,27 @@ function markdownToHtml(md) {
 
         flushTable();
 
-        if (/^### /.test(line))      { flushList(); output.push(`<h3>${inlineFormat(line.slice(4))}</h3>`); }
+        if (/^#### /.test(line))     { flushList(); output.push(`<h4>${inlineFormat(line.slice(5))}</h4>`); }
+        else if (/^### /.test(line)) { flushList(); output.push(`<h3>${inlineFormat(line.slice(4))}</h3>`); }
         else if (/^## /.test(line))  { flushList(); output.push(`<h2>${inlineFormat(line.slice(3))}</h2>`); }
         else if (/^# /.test(line))   { flushList(); output.push(`<h1>${inlineFormat(line.slice(2))}</h1>`); }
+        else if (/^> /.test(line)) {
+            flushList();
+            const inner = line.slice(2);
+            const cls   = calloutClass(inner);
+            output.push(`<div class="${cls}">${inlineFormat(inner)}</div>`);
+        }
+        else if (/^---+$/.test(line.trim())) {
+            flushList();
+            output.push("<hr>");
+        }
+        else if (/^\d+\. /.test(line)) {
+            if (inList) { output.push("</ul>"); inList = false; }
+            if (!inOl)  { output.push("<ol>"); inOl = true; }
+            output.push(`<li>${inlineFormat(line.replace(/^\d+\. /, ""))}</li>`);
+        }
         else if (/^[-*] /.test(line)) {
+            if (inOl) { output.push("</ol>"); inOl = false; }
             if (!inList) { output.push("<ul>"); inList = true; }
             output.push(`<li>${inlineFormat(line.slice(2))}</li>`);
         }
@@ -160,8 +185,15 @@ function buildHtmlPage(title, subtitle, bodyHtml) {
   li     { margin: .3rem 0; }
   p      { line-height: 1.65; }
   strong { color: var(--blue); }
-  .badge { display: inline-block; background: var(--accent); color: #fff; border-radius: 4px; padding: .2em .6em; font-size: .8rem; margin: .15rem .1rem; }
-  .warn  { background: #fff3cd; border-left: 4px solid #ffc107; padding: .75rem 1rem; border-radius: 4px; margin: 1rem 0; font-size: .9rem; }
+  h4     { color: var(--text); margin-top: 1.2rem; font-size: 1rem; }
+  hr     { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+  ol     { padding-left: 1.4rem; }
+  blockquote { border-left: 4px solid var(--border); margin: 1rem 0; padding: .5rem 1rem; color: #555; font-style: italic; }
+  .badge   { display: inline-block; background: var(--accent); color: #fff; border-radius: 4px; padding: .2em .6em; font-size: .8rem; margin: .15rem .1rem; }
+  .callout { border-left: 4px solid var(--border); background: #f8f9fa; padding: .75rem 1rem; border-radius: 4px; margin: 1rem 0; font-size: .9rem; }
+  .warn    { background: #fff3cd; border-left: 4px solid #ffc107; padding: .75rem 1rem; border-radius: 4px; margin: 1rem 0; font-size: .9rem; }
+  .info    { background: #d1ecf1; border-left: 4px solid #17a2b8; padding: .75rem 1rem; border-radius: 4px; margin: 1rem 0; font-size: .9rem; }
+  .danger  { background: #f8d7da; border-left: 4px solid #dc3545; padding: .75rem 1rem; border-radius: 4px; margin: 1rem 0; font-size: .9rem; }
   footer { text-align: center; padding: 1.5rem; font-size: .8rem; color: #888; border-top: 1px solid var(--border); margin-top: 3rem; }
 </style>
 </head>
@@ -856,8 +888,9 @@ Instead, close the architecture with a dedicated **Appendix A: Required Private 
 - The owning team / process responsible for registering these in the central zone
 
 ⚠️ DO NOT write Bicep or HTML output yet — output artifacts are written ONLY after rubber-duck review and rework (final output step).
+⚠️ NEVER use shell commands, the create tool, or the edit tool to write `.html` or `.bicep` files at any stage. The ONLY permitted way to write output files is via sovereign_architect_finalize_architecture in the reworking phase.
 
-When the draft architecture is presented, call sovereign_architect_save_architecture to save the draft and proceed to the rubber-duck review phase.` };
+When the draft architecture is presented, call sovereign_architect_save_architecture to save the draft and proceed to the rubber-duck review phase.`};
 
                 case "reviewing":
                     // Rubber-duck critique of the draft architecture
@@ -922,7 +955,9 @@ After presenting the reworked architecture and completing the pre-flight check, 
 - The final summary and complete markdown architecture
 - A complete Bicep template implementing the final design (choose a descriptive filename, e.g. sovereign-vm-gdpr.bicep)
 
-This is the final design step — sovereign_architect_finalize_architecture writes all output artifacts (HTML + Bicep) as the last action.` };
+⚠️ sovereign_architect_finalize_architecture is the ONLY permitted way to write output files. Do NOT use shell commands, the create tool, or the edit tool to write `.html` or `.bicep` files directly — doing so bypasses the extension's HTML template and produces inconsistent output.
+
+This is the final design step — sovereign_architect_finalize_architecture writes all output artifacts (HTML + Bicep) as the last action.`};
 
                 case "landing-zone":
                     // Step 2: LZ additions on top of existing architecture
