@@ -946,16 +946,34 @@ Produce an improved, final architecture that addresses all findings from the rub
 - **Fix it** in the redesign and note what changed, or
 - **Justify** why it does not apply to this customer's profile
 
-⚠️ MANDATORY PRE-FLIGHT CHECK — Before calling sovereign_architect_finalize_architecture, perform this self-audit of the final architecture markdown:
+⚠️ MANDATORY PRE-FLIGHT CHECK — Perform every step below IN ORDER and show your work as a numbered list before calling sovereign_architect_finalize_architecture. Do not skip or abbreviate any step.
 
-1. **VM completeness** — List every VM by name from the entire document (narrative text, Bicep pseudocode, design decisions, any section). Then verify each one appears as a row in the Component Design table (section 2.1 or equivalent). Count must match exactly. If any VM is missing from the table, add it before proceeding.
-2. **Network components** — Every named network resource (AppGW, Bastion, Load Balancer, Firewall, etc.) referenced in the architecture must appear in the Component Design table.
-3. **Sovereignty controls completeness** — Every component in the table must have an entry in the Sovereignty Controls Matrix.
-4. **Bicep completeness** — Every VM defined in the architecture must have a corresponding resource block in the Bicep template, including all required extensions (Entra SSH + AMA agent).
-5. **Private DNS zone WAF compliance** — The Bicep must contain NO \`Microsoft.Network/privateDnsZones\` resources (they belong in the Connectivity subscription). The architecture document must end with an **"Appendix A: Required Private DNS Zones"** section that lists: every zone name, the DNS record type and name, the target IP or FQDN, and the owning team/process. If the appendix is missing or the Bicep still contains DNS zone resources, fix both before proceeding.
-6. **WAF Alignment table completeness** — The architecture must contain a WAF Alignment table (section 5 or equivalent) with all 5 pillars: Reliability, Security, Cost Optimization, Operational Excellence, Performance Efficiency. Each row must have: at least one concrete architecture decision, a sovereign trade-off or constraint, and either an unresolved risk or an explicit "N/A — reason" or "Deferred — reason". If any pillar row is empty or missing, populate it before proceeding.
+**Step A — Build the VM inventory (three independent sources):**
+A1. Scan the entire architecture narrative (every paragraph, every tier description, every HA explanation) and list every individual VM name mentioned. Example: "vm-web-01, vm-web-02" — not "2× web VMs".
+A2. Scan the Bicep template and list the name of every \`Microsoft.Compute/virtualMachines\` resource block. One line per resource — e.g. "vm-web-01, vm-web-02, vm-app-01, vm-app-02, vm-data-01, vm-data-02, vm-data-03".
+A3. Scan the Component Design table (section 2.1 or equivalent) and list every VM row by name.
+A4. Compare all three lists. They must be identical sets. If any VM appears in A1 or A2 but is missing from A3 (the table), add the missing row(s) to the Component Design table before proceeding. If any VM appears in A3 but is missing from A2 (Bicep), add the missing Bicep resource block before proceeding.
 
-Only call sovereign_architect_finalize_architecture after verifying all four checks pass. If any check fails, fix the architecture and/or Bicep first.
+**Step B — Network components:**
+B1. List every named network resource referenced anywhere in the architecture (AppGW, Bastion, Internal Load Balancer, Azure Firewall, NAT Gateway, etc.).
+B2. Verify each one has a row in the Component Design table. Add any that are missing.
+
+**Step C — Sovereignty controls matrix:**
+C1. List every component (VM or network resource) in the Component Design table.
+C2. Verify each has a corresponding row in the Sovereignty Controls Matrix. Add any that are missing.
+
+**Step D — Bicep extensions:**
+D1. For every VM Bicep resource block, confirm it includes both the Entra SSH extension (\`AADSSHLoginForLinux\`) and the Azure Monitor Agent extension (\`AzureMonitorLinuxAgent\`). Add any missing extensions.
+
+**Step E — Private DNS zones (WAF/CAF compliance):**
+E1. Search the Bicep for any \`Microsoft.Network/privateDnsZones\` resource. If found, remove it — DNS zones belong in the Connectivity subscription.
+E2. Confirm the architecture ends with **Appendix A: Required Private DNS Zones** listing every zone name, record type, record name, target IP/FQDN, and owning team/process.
+
+**Step F — WAF Alignment table:**
+F1. Confirm the WAF Alignment table is present with all 5 pillars: Reliability, Security, Cost Optimization, Operational Excellence, Performance Efficiency.
+F2. Each row must have: a concrete architecture decision, a sovereign trade-off/constraint, and either a gap/risk or an explicit "N/A — reason" / "Deferred — reason". Fill in any empty cells before proceeding.
+
+Show the output of each step (A1–F2) explicitly in your response. Only call sovereign_architect_finalize_architecture after all steps pass with no discrepancies.
 
 After presenting the reworked architecture and completing the pre-flight check, call sovereign_architect_finalize_architecture with:
 - The final summary and complete markdown architecture
