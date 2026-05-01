@@ -10,7 +10,8 @@ SovArchitect is a **Copilot CLI extension** that acts as an expert sovereign wor
 2. **Validates** your existing Sovereign Landing Zone posture
 3. **Designs** a complete end-to-end sovereign architecture tailored to your profile
 4. **Generates Bicep templates** ready to deploy, with sovereignty controls built in
-5. **Saves outputs** to a timestamped session folder — every run is isolated
+5. **Rubber-Duck** for output validation using a different LLM 
+6. **Saves outputs** to a timestamped session folder — every run is isolated
 
 Each session produces:
 ```
