@@ -4,14 +4,16 @@
 // Workflow:
 //   Validation  — Check if a Sovereign Landing Zone already exists (always first)
 //   LZ-first    — No LZ: gather requirements → design LZ → offer workload design
-//   Normal      — Has LZ: gather requirements → design architecture → design LZ additions
+//   Normal      — Has LZ: gather requirements → design → review → rework → OUTPUT → LZ additions
 //
 // State machine per session:
 //   idle
 //     └─(sovereignty trigger)─► validating-lz
-//             ├─(lz exists)────► gathering ──► designing ──► landing-zone ──► complete
+//             ├─(lz exists)────► gathering ──► designing ──► reviewing ──► reworking ──► outputting ──► landing-zone ──► complete
 //             └─(no lz)────────► gathering ──► lz-setup ──► idle (lzExists=true)
-//                                                               └─(workload)─► designing ──► complete
+//                                                               └─(workload)─► designing ──► reviewing ──► reworking ──► outputting ──► complete
+//
+// Output (Bicep + HTML) is ALWAYS the last step — written only after rubber-duck review and rework.
 
 import { joinSession } from "@github/copilot-sdk/extension";
 import fs   from "fs";
@@ -24,9 +26,9 @@ function sessionOutputDir(sessionId) {
     const sess = sessions.get(sessionId);
     if (!sess) return BASE_OUTPUT_DIR;
     if (!sess.outputDir) {
-        const ts     = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-        const suffix = sessionId.slice(-6);
-        sess.outputDir = path.join(BASE_OUTPUT_DIR, `${ts}-${suffix}`);
+        const ts   = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+        const rand = Math.random().toString(36).slice(2, 5);
+        sess.outputDir = path.join(BASE_OUTPUT_DIR, `${ts}-${rand}`);
     }
     return sess.outputDir;
 }
@@ -205,7 +207,8 @@ function getSessionState(sessionId) {
             lzExists: false,   // true once a Sovereign LZ is confirmed or defined
             lzFirst:  false,   // true when taking the LZ-first path (no LZ existed)
             profile: null,
-            architecture: null,
+            architecture: null,    // draft architecture (pre-review)
+            reviewNotes: null,     // rubber-duck critique findings
             landingZone: null,
         });
     }
@@ -427,18 +430,21 @@ Call this tool with their combined answer to advance the workflow.`,
                     return "Understood. Let me know when you're ready to proceed.";
                 }
 
+                // Always reset profile/architecture for a fresh design session
+                sess.profile      = null;
+                sess.architecture = null;
+                sess.reviewNotes  = null;
+                sess.landingZone  = null;
+
+                // Eagerly create the output workfolder for this session
+                ensureOutputDir(invocation.sessionId);
+
                 if (args.lz_exists) {
-                    // Has LZ — go straight to workload design
+                    // Has LZ — gather fresh requirements then design workload
                     sess.lzExists = true;
                     sess.lzFirst  = false;
-                    if (sess.profile) {
-                        // Profile already gathered (e.g. returning after prior session work)
-                        sess.state = "designing";
-                        return "Sovereign Landing Zone confirmed. Proceeding to workload architecture design.";
-                    } else {
-                        sess.state = "gathering";
-                        return "Sovereign Landing Zone confirmed. Now gathering sovereignty requirements before designing the workload architecture.";
-                    }
+                    sess.state = "gathering";
+                    return "Sovereign Landing Zone confirmed. Now gathering fresh sovereignty requirements before designing the workload architecture.";
                 } else {
                     // No LZ — gather requirements then design LZ first
                     sess.lzExists = false;
@@ -450,9 +456,11 @@ Call this tool with their combined answer to advance the workflow.`,
         },
         {
             name: "sovereign_architect_save_architecture",
-            description: `Save the completed sovereign architecture design (Step 1) and advance to Step 2.
+            description: `Save the sovereign architecture DRAFT (Step 1) and advance to the rubber-duck review phase.
 
-Call this tool after presenting the full end-to-end sovereign architecture to the customer.
+Call this tool after presenting the initial architecture design to the customer.
+This saves the draft only — NO output artifacts are written yet.
+Rubber-duck review → rework → output happen in subsequent steps.
 
 The architecture document should cover:
 - Architecture overview and sovereignty-driven design principles
@@ -472,25 +480,82 @@ The architecture document should cover:
             handler: async (args, invocation) => {
                 const sess = getSessionState(invocation.sessionId);
                 sess.architecture = args;
+                // Transition to review — output artifacts written only after rework
+                sess.state = "reviewing";
+                return `Architecture draft saved.\n\nProceeding to rubber-duck review phase.\n\nCritique this architecture design thoroughly for sovereignty gaps, missing controls, compliance risks, and improvements before rework and final output.`;
+            },
+        },
+        {
+            name: "sovereign_architect_save_review",
+            description: `Save the rubber-duck critique findings and advance to the rework phase.
 
-                // Write HTML presentation
-                const profile    = sess.profile;
-                const subtitle   = profile?.data?.regulations?.join(" · ") || "Sovereign Architecture";
-                let htmlPath;
+Call this tool after performing a thorough rubber-duck critique of the architecture draft.
+The review should identify: sovereignty gaps, missing controls, compliance risks, design improvements, and edge cases.`,
+            skipPermission: true,
+            parameters: {
+                type: "object",
+                properties: {
+                    findings: { type: "string", description: "Rubber-duck critique findings in markdown — gaps, risks, improvements, items to address" },
+                },
+                required: ["findings"],
+            },
+            handler: async (args, invocation) => {
+                const sess = getSessionState(invocation.sessionId);
+                sess.reviewNotes = args.findings;
+                sess.state = "reworking";
+                return `Review findings saved. Proceeding to rework phase.\n\nIncorporate all critique findings into an improved final architecture, then call sovereign_architect_finalize_architecture to write all output artifacts.`;
+            },
+        },
+        {
+            name: "sovereign_architect_finalize_architecture",
+            description: `Save the final reworked sovereign architecture and write all output artifacts (HTML presentation + Bicep template).
+
+THIS IS THE OUTPUT STEP — call ONLY after rubber-duck review and rework are complete.
+Do NOT call this tool during initial design — it must follow sovereign_architect_save_review.
+
+Writes to the session output folder:
+  - architecture.html  — full HTML presentation of the final architecture
+  - <filename>.bicep   — complete Bicep IaC template
+
+After this tool completes, the workflow proceeds to Landing Zone & Governance design (Step 2).`,
+            skipPermission: true,
+            parameters: {
+                type: "object",
+                properties: {
+                    summary:        { type: "string", description: "2–3 sentence summary of the final architecture" },
+                    architecture:   { type: "string", description: "Full final architecture in markdown format (incorporating review feedback)" },
+                    bicep_filename: { type: "string", description: "Bicep filename, e.g. sovereign-vm-gdpr.bicep" },
+                    bicep_content:  { type: "string", description: "Full Bicep template content" },
+                },
+                required: ["summary", "architecture", "bicep_filename", "bicep_content"],
+            },
+            handler: async (args, invocation) => {
+                const sess = getSessionState(invocation.sessionId);
+                sess.architecture = { summary: args.summary, architecture: args.architecture };
+
+                const profile  = sess.profile;
+                const subtitle = profile?.data?.regulations?.join(" · ") || "Sovereign Architecture";
+
+                let htmlPath, bicepPath;
                 try {
                     htmlPath = writeHtml("architecture", "Sovereign Architecture Design", subtitle, args.architecture, invocation.sessionId);
                 } catch (e) {
-                    htmlPath = `(could not write file: ${e.message})`;
+                    htmlPath = `(could not write HTML: ${e.message})`;
+                }
+                try {
+                    bicepPath = writeBicep(args.bicep_filename, args.bicep_content, invocation.sessionId);
+                } catch (e) {
+                    bicepPath = `(could not write Bicep: ${e.message})`;
                 }
 
                 const outDir = sessionOutputDir(invocation.sessionId);
                 if (sess.lzExists) {
                     sess.state = "complete";
-                    return `Architecture saved.\n\n✅ Sovereignty profile captured\n✅ Sovereign architecture designed\n✅ Existing Sovereign Landing Zone & Management Group hierarchy will govern this workload\n\n📄 HTML presentation: ${htmlPath}\n📁 Bicep templates: ${outDir}\n\nNo new Landing Zone design required — your existing SLZ policies and governance already apply.\n\nAsk for revisions, deep-dives into specific components, or use sovereign_architect_get_profile to review the requirements.`;
+                    return `✅ Final architecture saved — all output artifacts written.\n\n✅ Sovereignty profile captured\n✅ Architecture designed, reviewed, and reworked\n✅ Existing Sovereign Landing Zone & Management Group hierarchy governs this workload\n\n📄 Architecture: ${htmlPath}\n📄 Bicep: ${bicepPath}\n📁 Output folder: ${outDir}\n\nNo new Landing Zone design required — existing SLZ policies apply.`;
                 }
 
                 sess.state = "landing-zone";
-                return `Architecture saved.\n\n📄 HTML presentation: ${htmlPath}\n📁 Bicep templates: ${outDir}\n\nProceeding to Step 2: Landing Zone & Governance Setup.\n\nNow design the complete landing zone and governance structure that will operate this architecture. Cover management groups, subscriptions, SLZ policy portfolio, Azure Policy assignments, identity governance, network topology, and compliance monitoring.`;
+                return `✅ Final architecture saved — all output artifacts written.\n\n📄 Architecture: ${htmlPath}\n📄 Bicep: ${bicepPath}\n📁 Output folder: ${outDir}\n\nProceeding to Step 2: Landing Zone & Governance Design.`;
             },
         },
         {
@@ -543,15 +608,14 @@ The landing zone document should cover:
         },
         {
             name: "sovereign_architect_write_bicep",
-            description: `Write a Bicep (or ARM JSON) template to the sovereign-output/ folder in the current working directory.
+            description: `Write a supplementary Bicep (or ARM JSON) template to the sovereign-output/ folder.
 
-WHEN TO USE: After generating a Bicep template during the architecture design step.
-Always call this tool to persist the template — do not only show the template inline.
+NOTE: The primary Bicep output is written automatically by sovereign_architect_finalize_architecture.
+Use this tool ONLY for additional/supplementary templates (e.g., a separate landing zone Bicep, a policy definition file).
 
-The filename should be descriptive and reflect the workload, e.g.:
-  webapp-postgres-gdpr.bicep
-  aks-sql-fedramp.bicep
-  landing-zone-nlgov.bicep`,
+The filename should be descriptive and reflect the component, e.g.:
+  landing-zone-nlgov.bicep
+  policy-gdpr-custom.bicep`,
             skipPermission: true,
             parameters: {
                 type: "object",
@@ -754,8 +818,8 @@ Use sovereign_architect_landing_zone to fetch SLZ guidance for each topic.
 When the landing zone design is presented and approved, call sovereign_architect_save_landing_zone to save it.` };
 
                 case "designing":
-                    // Step 1: workload architecture design
-                    return { additionalContext: `## STEP 1: Sovereign Architecture Design
+                    // Step 1: workload architecture design (draft — no output artifacts yet)
+                    return { additionalContext: `## STEP 1: Sovereign Architecture Design (DRAFT)
 ${summarizeProfile(sess.profile)}
 
 Design a complete end-to-end sovereign architecture tailored to this profile. Structure the output as:
@@ -769,9 +833,51 @@ Design a complete end-to-end sovereign architecture tailored to this profile. St
 
 Use sovereign_architect_search_docs and sovereign_architect_cloud_services to validate service availability in the target environment.
 
-**BICEP TEMPLATE**: After presenting the architecture, generate a complete Bicep template and call sovereign_architect_write_bicep to save it to the sovereign-output/ folder. Choose a descriptive filename (e.g. webapp-postgres-gdpr.bicep).
+⚠️ DO NOT write Bicep or HTML output yet — output artifacts are written ONLY after rubber-duck review and rework (final output step).
 
-When the architecture is presented and approved, call sovereign_architect_save_architecture to save it and proceed.` };
+When the draft architecture is presented, call sovereign_architect_save_architecture to save the draft and proceed to the rubber-duck review phase.` };
+
+                case "reviewing":
+                    // Rubber-duck critique of the draft architecture
+                    return { additionalContext: `## RUBBER-DUCK REVIEW PHASE
+${summarizeProfile(sess.profile)}
+
+**Architecture draft to critique:**
+${sess.architecture?.architecture || "(see previous output)"}
+
+Perform a thorough, adversarial rubber-duck critique of this sovereign architecture. Check every component against the customer's sovereignty profile. Specifically look for:
+
+1. **Sovereignty gaps** — any component that does not fully satisfy data / control plane / software sovereignty requirements
+2. **Missing controls** — required controls (Lockbox, CMK, private endpoints, Defender for Cloud, etc.) that are absent or incomplete
+3. **Regulation compliance gaps** — specific gaps against each applicable regulation (GDPR Art. 25/32, NIS2, EUCS, FedRAMP, etc.)
+4. **Network exposure risks** — any surface that should be private but is publicly accessible
+5. **Identity & access risks** — over-privileged roles, missing PIM, lack of conditional access, no JIT
+6. **Key management risks** — key rotation policy, backup, access policy, HSM availability zone coverage
+7. **Resilience vs. data residency conflicts** — cross-region DR that may violate residency requirements
+8. **Design improvements** — anything that would make the architecture more sovereign, robust, or operable
+
+Present the full critique to the user, then call sovereign_architect_save_review with your findings.` };
+
+                case "reworking":
+                    // Incorporate review critique into improved final architecture
+                    return { additionalContext: `## REWORK PHASE — Incorporate Critique Findings
+${summarizeProfile(sess.profile)}
+
+**Review findings to incorporate:**
+${sess.reviewNotes || "(see review output)"}
+
+**Original draft architecture:**
+${sess.architecture?.architecture || "(see previous output)"}
+
+Produce an improved, final architecture that addresses all findings from the rubber-duck review. For each finding either:
+- **Fix it** in the redesign and note what changed, or
+- **Justify** why it does not apply to this customer's profile
+
+After presenting the reworked architecture, call sovereign_architect_finalize_architecture with:
+- The final summary and complete markdown architecture
+- A complete Bicep template implementing the final design (choose a descriptive filename, e.g. sovereign-vm-gdpr.bicep)
+
+This is the final design step — sovereign_architect_finalize_architecture writes all output artifacts (HTML + Bicep) as the last action.` };
 
                 case "landing-zone":
                     // Step 2: LZ additions on top of existing architecture
