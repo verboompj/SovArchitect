@@ -753,55 +753,52 @@ The filename should be descriptive and reflect the component, e.g.:
   Then call sovereign_architect_confirm_environment with lz_exists=false and proceed=<their answer>.` };
 
                 case "gathering":
-                    // Mid-intake — provide exact ask_user templates with correct multiselect format
+                    // Mid-intake — provide exact ask_user templates (single-select enums only — no arrays, no free-text)
                     return { additionalContext: `Collect the customer's sovereignty requirements across 3 pillars using ask_user. Make 3 separate calls — one per pillar.
 
-⚠️ CRITICAL FORMAT RULE — For multi-select fields (regulations, data types) you MUST use the anyOf format:
-  "fieldName": { "type": "array", "title": "...", "items": { "anyOf": [{"const":"GDPR","title":"GDPR"}, ...] }, "default": ["GDPR"], "minItems": 1 }
-  DO NOT use: "items": {"type":"string","enum":[...]} — that format fails validation.
+⚠️ CRITICAL FORMAT RULE — Use ONLY { "type": "string", "enum": [...] } fields. Do NOT use type:array or free-text fields — they fail validation.
 
 STEP 1 — ask_user for Data Sovereignty:
 {
-  "message": "Sovereign Architect — Data Sovereignty\\n\\nWhere does your data reside, what regulations apply, and what types of sensitive data are involved?",
+  "message": "Sovereign Architect — Data Sovereignty (1/3)\\n\\nWhere does your data reside, what regulations apply, and what data types are involved?",
   "requestedSchema": {
     "properties": {
-      "residency":            { "type": "string",  "title": "Where must your data reside?", "description": "e.g. Netherlands, EU-only, Germany, US" },
-      "regulations":          { "type": "array",   "title": "Which regulations or standards apply?", "items": { "anyOf": [{"const":"GDPR","title":"GDPR"},{"const":"NIS2","title":"NIS2"},{"const":"FedRAMP High","title":"FedRAMP High"},{"const":"ITAR","title":"ITAR"},{"const":"CJIS","title":"CJIS"},{"const":"EUCS","title":"EUCS"},{"const":"ISO 27001","title":"ISO 27001"},{"const":"HIPAA","title":"HIPAA"}] }, "default": ["GDPR"], "minItems": 1 },
-      "data_types":           { "type": "array",   "title": "What types of sensitive data are involved?", "items": { "anyOf": [{"const":"PII","title":"PII (personal data)"},{"const":"Financial","title":"Financial"},{"const":"Health/PHI","title":"Health / PHI"},{"const":"Government classified","title":"Government classified"},{"const":"Intellectual property","title":"Intellectual property"},{"const":"General business","title":"General business"}] }, "default": ["PII"], "minItems": 1 },
-      "cross_border":         { "type": "string",  "title": "Can data cross national borders for DR/backup?", "enum": ["Yes", "No"], "default": "No" },
-      "access_restrictions":  { "type": "string",  "title": "Who is permitted to access the data? (leave blank if no restriction)", "description": "e.g. EU nationals only, cleared US personnel" }
+      "region":              { "type": "string", "title": "Primary Azure region", "enum": ["West Europe (Netherlands)", "North Europe (Ireland)", "Germany West Central", "France Central", "Sweden Central", "Switzerland North", "UAE North", "East US", "Other"], "default": "West Europe (Netherlands)" },
+      "regulations":         { "type": "string", "title": "Applicable regulations / standards", "enum": ["GDPR", "GDPR + NIS2", "GDPR + NIS2 + EUCS", "GDPR + BIO (NL Government)", "GDPR + NEN 7510 (NL Healthcare)", "GDPR + NIS2 + NEN 7510", "FedRAMP High", "FedRAMP High + ITAR", "HIPAA + HITECH", "ISO 27001 only"], "default": "GDPR + NIS2" },
+      "data_classification": { "type": "string", "title": "Data classification", "enum": ["PII only", "PII + Health/PHI", "PII + Financial", "Government Classified", "Intellectual Property / Trade Secrets", "General Business Data"], "default": "PII only" },
+      "cross_border":        { "type": "string", "title": "Cross-border data transfer allowed?", "enum": ["No — data must stay in primary region", "EU/EEA only", "No restrictions"], "default": "No — data must stay in primary region" }
     },
-    "required": ["residency", "regulations", "data_types", "cross_border"]
+    "required": ["region", "regulations", "data_classification", "cross_border"]
   }
 }
 
 STEP 2 — ask_user for Control Plane Sovereignty:
 {
-  "message": "Sovereign Architect — Control Plane Sovereignty\\n\\nHow should the cloud environment and key management be configured?",
+  "message": "Sovereign Architect — Control Plane Sovereignty (2/3)\\n\\nHow should the cloud environment, key management, and operator access be configured?",
   "requestedSchema": {
     "properties": {
-      "environment":            { "type": "string", "title": "Which cloud environment is required?", "enum": ["Commercial Azure + Microsoft Cloud for Sovereignty", "Azure Government (US)", "Azure China (21Vianet)", "Sovereign / Dedicated Region", "Air-gapped / Disconnected"], "default": "Commercial Azure + Microsoft Cloud for Sovereignty" },
-      "key_management":         { "type": "string", "title": "How should encryption keys be managed?", "enum": ["Microsoft-managed keys", "Customer-Managed Keys (Key Vault)", "Customer-Managed Keys (Managed HSM — FIPS 140-3 Level 3)", "On-premises HSM (BYOK)"], "default": "Customer-Managed Keys (Key Vault)" },
-      "lockbox":                { "type": "string", "title": "Is Customer Lockbox required for all Microsoft support access?", "enum": ["Yes", "No"], "default": "Yes" },
-      "operator_restrictions":  { "type": "string", "title": "Nationality / clearance restrictions on operators? (leave blank if none)", "description": "e.g. EU-resident staff only, Dutch nationals only" },
-      "disconnected":           { "type": "string", "title": "Is disconnected / air-gapped operation required?", "enum": ["Yes", "No"], "default": "No" }
+      "environment":           { "type": "string", "title": "Cloud environment", "enum": ["Commercial Azure + Microsoft Cloud for Sovereignty", "Azure Government (US)", "Azure China (21Vianet)", "Sovereign / Dedicated Region", "Air-gapped / Disconnected"], "default": "Commercial Azure + Microsoft Cloud for Sovereignty" },
+      "key_management":        { "type": "string", "title": "Encryption key management", "enum": ["Microsoft-managed keys", "Customer-Managed Keys (Key Vault)", "Customer-Managed Keys (Managed HSM — FIPS 140-3 Level 3)", "On-premises HSM (BYOK)"], "default": "Customer-Managed Keys (Managed HSM — FIPS 140-3 Level 3)" },
+      "lockbox":               { "type": "string", "title": "Customer Lockbox required?", "enum": ["Yes", "No"], "default": "Yes" },
+      "operator_restrictions": { "type": "string", "title": "Operator nationality / clearance restrictions", "enum": ["No restrictions", "EU-resident staff only", "Dutch nationals only", "German nationals only", "US cleared personnel only", "Other — note in workload description"], "default": "No restrictions" },
+      "disconnected":          { "type": "string", "title": "Air-gapped / disconnected operation required?", "enum": ["No", "Yes — air-gapped required"], "default": "No" }
     },
-    "required": ["environment", "key_management", "lockbox"]
+    "required": ["environment", "key_management", "lockbox", "operator_restrictions", "disconnected"]
   }
 }
 
 STEP 3 — ask_user for Software Sovereignty:
 {
-  "message": "Sovereign Architect — Software Sovereignty\\n\\nWhat are your software portability and vendor independence requirements?",
+  "message": "Sovereign Architect — Software Sovereignty (3/3)\\n\\nWhat are your software portability, vendor independence, and workload requirements?",
   "requestedSchema": {
     "properties": {
-      "vendor_independence":  { "type": "string", "title": "How important is vendor independence?", "enum": ["Not required", "Preferred", "Required"], "default": "Preferred" },
-      "oss_preference":       { "type": "string", "title": "Preference for open-source or open-standard technologies?", "enum": ["Yes — prefer open-source", "No preference", "No — proprietary is fine"], "default": "Yes — prefer open-source" },
-      "portability":          { "type": "string", "title": "Must workloads be portable across multiple cloud providers?", "enum": ["Yes — portability required", "No"], "default": "No" },
-      "hybrid":               { "type": "string", "title": "Is on-premises or hybrid deployment required?", "enum": ["Yes", "No"], "default": "No" },
-      "software_restrictions": { "type": "string", "title": "Software origin, licensing, or SBOM restrictions? (leave blank if none)", "description": "e.g. no US-origin software, SBOM required" }
+      "vendor_independence":   { "type": "string", "title": "Vendor independence requirement", "enum": ["Not required", "Preferred", "Required"], "default": "Preferred" },
+      "oss_preference":        { "type": "string", "title": "Open-source / open-standards preference", "enum": ["Yes — prefer open-source", "No preference", "No — proprietary is fine"], "default": "Yes — prefer open-source" },
+      "portability":           { "type": "string", "title": "Multi-cloud portability required?", "enum": ["No", "Yes — portability required"], "default": "No" },
+      "hybrid":                { "type": "string", "title": "On-premises / hybrid deployment required?", "enum": ["No", "Yes — hybrid required"], "default": "No" },
+      "software_restrictions": { "type": "string", "title": "Software origin or licensing restrictions", "enum": ["No restrictions", "No US-origin software", "SBOM required", "No US-origin software + SBOM required", "EU-origin only"], "default": "No restrictions" }
     },
-    "required": ["vendor_independence", "oss_preference", "portability", "hybrid"]
+    "required": ["vendor_independence", "oss_preference", "portability", "hybrid", "software_restrictions"]
   }
 }
 
@@ -966,15 +963,21 @@ When the landing zone is presented and approved, call sovereign_architect_save_l
                         } else {
                             // First interaction — validate LZ status before anything else
                             sess.state = "validating-lz";
-                            return { additionalContext: `⚠️ VALIDATION REQUIRED before proceeding. Ask the customer exactly this question first:
+                            return { additionalContext: `⚠️ VALIDATION REQUIRED before proceeding. Use ask_user with this exact schema:
 
-"Do you already have a Sovereign Landing Zone and Management Group hierarchy in place? (y/n)"
+{
+  "message": "Sovereign Architect — Environment Check\\n\\nBefore designing, confirm your current Azure environment setup.",
+  "requestedSchema": {
+    "properties": {
+      "lz_exists": { "type": "string", "title": "Do you already have a Sovereign Landing Zone and Management Group hierarchy in place?", "enum": ["Yes — design a sovereign workload on top of it", "No — design a new Sovereign Landing Zone first"], "default": "Yes — design a sovereign workload on top of it" }
+    },
+    "required": ["lz_exists"]
+  }
+}
 
-Wait for their answer, then:
-- If YES → ask: "Would you like to continue designing a sovereign workload?"
-- If NO  → ask: "Would you like to start by defining a new Sovereign Landing Zone?"
-
-Then call sovereign_architect_confirm_environment with their answers.` };
+Then call sovereign_architect_confirm_environment based on their answer:
+- "Yes — design a sovereign workload on top of it" → lz_exists=true, proceed=true
+- "No — design a new Sovereign Landing Zone first" → lz_exists=false, proceed=true` };
                         }
                     }
                     break;
