@@ -38,14 +38,34 @@ sovereign-output/
 
 ## Installation
 
-```bash
-# Clone into your Copilot CLI user extensions folder
-git clone https://github.com/verboompj/SovArchitect \
-  ~/.copilot/extensions/sovereign-azure
+The extension lives in a subdirectory of this repo, so a plain `git clone` would place it at the wrong path. Use sparse checkout instead:
 
-# Or on Windows:
-git clone https://github.com/verboompj/SovArchitect \
-  %USERPROFILE%\.copilot\extensions\sovereign-azure
+```bash
+# macOS / Linux — sparse checkout (recommended)
+git clone --filter=blob:none --sparse https://github.com/verboompj/SovArchitect /tmp/SovArchitect && \
+  cd /tmp/SovArchitect && \
+  git sparse-checkout set .copilot/extensions/sovereign-azure && \
+  cp -r .copilot/extensions/sovereign-azure ~/.copilot/extensions/ && \
+  cd ~/.copilot/extensions/sovereign-azure && \
+  npm install
+
+# Or use curl to download files directly (no git required)
+mkdir -p ~/.copilot/extensions/sovereign-azure && \
+  BASE="https://raw.githubusercontent.com/verboompj/SovArchitect/main/.copilot/extensions/sovereign-azure" && \
+  curl -fsSL "$BASE/extension.mjs" -o ~/.copilot/extensions/sovereign-azure/extension.mjs && \
+  curl -fsSL "$BASE/package.json"   -o ~/.copilot/extensions/sovereign-azure/package.json && \
+  cd ~/.copilot/extensions/sovereign-azure && \
+  npm install
+```
+
+```powershell
+# Windows (PowerShell) — sparse checkout
+git clone --filter=blob:none --sparse https://github.com/verboompj/SovArchitect $env:TEMP\SovArchitect
+cd $env:TEMP\SovArchitect
+git sparse-checkout set .copilot/extensions/sovereign-azure
+Copy-Item -Recurse .copilot\extensions\sovereign-azure "$env:USERPROFILE\.copilot\extensions\sovereign-azure"
+cd "$env:USERPROFILE\.copilot\extensions\sovereign-azure"
+npm install
 ```
 
 Restart (or reload) the Copilot CLI — the extension loads automatically.
