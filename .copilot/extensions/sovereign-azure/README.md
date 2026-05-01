@@ -59,7 +59,7 @@ create a webapp and relational database backend, it has to comply to sovereignty
 
 -or-
 
-create a 3 tier VM setup hosting a web application
+create a 3 tier VM setup hosting a web application, it has to comply to sovereignty
 ```
 
 The extension guides you through:
