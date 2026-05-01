@@ -47,18 +47,17 @@ The extension lives in a subdirectory of this repo, so a plain `git clone` would
 
 ```bash
 # macOS / Linux — sparse checkout (recommended)
-git clone --filter=blob:none --sparse https://github.com/verboompj/SovArchitect /tmp/SovArchitect && \
+mkdir -p ~/.copilot/extensions && \
+  git clone --filter=blob:none --sparse https://github.com/verboompj/SovArchitect /tmp/SovArchitect && \
   cd /tmp/SovArchitect && \
   git sparse-checkout set .copilot/extensions/sovereign-azure && \
-  cp -r .copilot/extensions/sovereign-azure ~/.copilot/extensions/ && \
-  cd ~/.copilot/extensions/sovereign-azure
+  cp -r .copilot/extensions/sovereign-azure ~/.copilot/extensions/
 
 # Or use curl to download files directly (no git required)
 mkdir -p ~/.copilot/extensions/sovereign-azure && \
   BASE="https://raw.githubusercontent.com/verboompj/SovArchitect/main/.copilot/extensions/sovereign-azure" && \
   curl -fsSL "$BASE/extension.mjs" -o ~/.copilot/extensions/sovereign-azure/extension.mjs && \
-  curl -fsSL "$BASE/package.json"   -o ~/.copilot/extensions/sovereign-azure/package.json && \
-  cd ~/.copilot/extensions/sovereign-azure
+  curl -fsSL "$BASE/package.json"   -o ~/.copilot/extensions/sovereign-azure/package.json
 ```
 
 ```powershell
@@ -66,8 +65,8 @@ mkdir -p ~/.copilot/extensions/sovereign-azure && \
 git clone --filter=blob:none --sparse https://github.com/verboompj/SovArchitect $env:TEMP\SovArchitect
 cd $env:TEMP\SovArchitect
 git sparse-checkout set .copilot/extensions/sovereign-azure
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.copilot\extensions" | Out-Null
 Copy-Item -Recurse .copilot\extensions\sovereign-azure "$env:USERPROFILE\.copilot\extensions\sovereign-azure"
-cd "$env:USERPROFILE\.copilot\extensions\sovereign-azure"
 ```
 
 Restart (or reload) the Copilot CLI — the extension loads automatically.
