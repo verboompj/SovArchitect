@@ -519,6 +519,7 @@ BEFORE CALLING THIS TOOL, verify the architecture markdown passes all pre-flight
 - Every component in the table has an entry in the Sovereignty Controls Matrix
 - Every VM in the architecture has a Bicep resource block + required extensions (Entra SSH + AMA)
 - Bicep contains NO Microsoft.Network/privateDnsZones resources; architecture ends with Appendix A listing all required Private DNS zones + DNS entries (WAF compliance)
+- WAF Alignment table present with all 5 pillars (Reliability, Security, Cost Optimization, Operational Excellence, Performance Efficiency), each with a concrete decision + sovereign trade-off + gap/defer
 
 Writes to the session output folder:
   - architecture.html  — full HTML presentation of the final architecture
@@ -837,6 +838,16 @@ Design a complete end-to-end sovereign architecture tailored to this profile. St
    - How it satisfies data sovereignty, control plane sovereignty, and software sovereignty
 3. **Sovereignty Controls Matrix** — a table mapping each component → control applied → requirement satisfied
 4. **Key Design Decisions** — decisions that differ from a standard architecture because of this customer's specific sovereignty requirements
+5. **WAF Alignment** — a table with columns: **Pillar | Architecture Decision(s) | Sovereign Trade-off / Constraint | Gap or Deferred Item**
+   Include one row per pillar:
+   - **Reliability**: HA patterns (multi-AZ, active-passive, autoscale), RTO/RPO targets, backup procedures, health monitoring, in-country DR constraints (no cross-border failover if data residency is strict)
+   - **Security**: Zero Trust (managed identities for all inter-service calls), secret rotation policy, admin plane access (Bastion only — no public RDP/SSH), threat detection, confidential VM attestation dependencies, telemetry/log data residency
+   - **Cost Optimization**: SKU right-sizing, autoscale configured, confidential computing premium (CVM SKUs, Managed HSM, Private Link, Bastion), reserved instance candidates for baseline capacity
+   - **Operational Excellence**: IaC coverage (Bicep), Day-1 operational procedures documented (HSM security domain, Patroni, Lockbox), monitoring/alerting (Log Analytics, Alerts, Defender), patch/update strategy (Update Manager), break-glass support model under sovereignty restrictions
+   - **Performance Efficiency**: Compute sized for expected load, autoscale triggers defined, confidential computing overhead documented (SEV-SNP/TDX CPU overhead ~5-15%), HSM/private endpoint latency, DB connection pooling/caching
+   For each row: every pillar must have a concrete architecture decision AND either an explicit sovereign trade-off or an explicit "N/A — not applicable because …" or "Deferred — reason …"
+
+**Appendix A: Required Private DNS Zones** — list every Private DNS zone the workload needs, with: zone name, record type, record name, target IP/FQDN, and owning team/process
 
 Use sovereign_architect_search_docs and sovereign_architect_cloud_services to validate service availability in the target environment.
 
@@ -871,6 +882,17 @@ Perform a thorough, adversarial rubber-duck critique of this sovereign architect
 8. **Design improvements** — anything that would make the architecture more sovereign, robust, or operable
 9. **Private DNS zone placement (WAF violation check)** — flag as a WAF/CAF violation if any `Microsoft.Network/privateDnsZones` resources appear in the workload Bicep or architecture. They belong in the central Connectivity subscription (hub). Verify the architecture ends with an "Appendix A: Required Private DNS Zones" section listing every zone name and required DNS entries.
 
+### WAF Pillar Validation
+For each of the 5 pillars, evaluate using this rubric: (1) what does the architecture actually do for this pillar, (2) is the sovereign-specific trade-off or constraint acknowledged, (3) is there a gap, risk, or item that should be deferred?
+
+- **Reliability**: Are HA patterns defined per tier? Is RTO/RPO documented and feasible within data-residency constraints (no cross-region failover to countries outside the permitted zone)? Is multi-AZ used for all stateful components? Is there a backup/restore procedure? Are health endpoints and alerting defined? What is the Azure service/AZ availability in the target sovereign geography?
+- **Security** *(distinct from sovereignty — focus on workload/platform security)*: Is Zero Trust applied (managed identities for all inter-service calls, no embedded credentials)? Is there a secret rotation policy? Are all management ports private (Bastion only, no public RDP/SSH)? Is threat detection configured (Defender for Servers P2)? Does confidential VM attestation have key-release policy dependencies? Is telemetry/log data residency addressed (Log Analytics workspace in-region)?
+- **Cost Optimization**: Are VM SKUs right-sized for the workload? Is autoscale configured to prevent idle over-spend? Are the sovereignty premiums acknowledged (CVM SKUs, Managed HSM, Private Link, Bastion, Defender P2)? Are reserved instance candidates identified for predictable baseline capacity? Are there any unused/over-provisioned resources?
+- **Operational Excellence**: Is all infrastructure declared as IaC (Bicep)? Are Day-1 operational procedures documented (HSM security domain ceremony, Patroni setup, Customer Lockbox enablement)? Is there a monitoring and alerting strategy (Log Analytics workspace, metric alerts, Defender dashboards)? Is patch/update management defined (Azure Update Manager)? Is the break-glass / emergency-access model documented under sovereignty restrictions?
+- **Performance Efficiency**: Is compute sized for expected peak load? Is an autoscale or scaling strategy defined with specific triggers? Is confidential computing overhead acknowledged (~5–15% CPU for AMD SEV-SNP/Intel TDX)? Are HSM and private endpoint latency impacts documented? Is DB connection pooling or caching considered?
+
+Flag any pillar that is missing a concrete architecture decision or is missing an explicit N/A/Defer rationale as a finding.
+
 Present the full critique to the user, then call sovereign_architect_save_review with your findings.` };
 
                 case "reworking":
@@ -895,6 +917,7 @@ Produce an improved, final architecture that addresses all findings from the rub
 3. **Sovereignty controls completeness** — Every component in the table must have an entry in the Sovereignty Controls Matrix.
 4. **Bicep completeness** — Every VM defined in the architecture must have a corresponding resource block in the Bicep template, including all required extensions (Entra SSH + AMA agent).
 5. **Private DNS zone WAF compliance** — The Bicep must contain NO `Microsoft.Network/privateDnsZones` resources (they belong in the Connectivity subscription). The architecture document must end with an **"Appendix A: Required Private DNS Zones"** section that lists: every zone name, the DNS record type and name, the target IP or FQDN, and the owning team/process. If the appendix is missing or the Bicep still contains DNS zone resources, fix both before proceeding.
+6. **WAF Alignment table completeness** — The architecture must contain a WAF Alignment table (section 5 or equivalent) with all 5 pillars: Reliability, Security, Cost Optimization, Operational Excellence, Performance Efficiency. Each row must have: at least one concrete architecture decision, a sovereign trade-off or constraint, and either an unresolved risk or an explicit "N/A — reason" or "Deferred — reason". If any pillar row is empty or missing, populate it before proceeding.
 
 Only call sovereign_architect_finalize_architecture after verifying all four checks pass. If any check fails, fix the architecture and/or Bicep first.
 
